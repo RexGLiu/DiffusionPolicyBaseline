@@ -1,0 +1,156 @@
+_target_: diffusion_policy.workspace.train_diffusion_transformer_image_workspace.TrainDiffusionTransformerImageWorkspace
+action_dim: 1
+checkpoint:
+  save_last_ckpt: true
+  save_last_snapshot: false
+  topk:
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+    k: 5
+    mode: max
+    monitor_key: test_mean_score
+dataloader:
+  batch_size: 64
+  num_workers: 16
+  persistent_workers: true
+  pin_memory: true
+  shuffle: true
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  inv_gamma: 1.0
+  max_value: 0.9999
+  min_value: 0.0
+  power: 0.75
+  update_after_step: 0
+exp_name: default
+horizon: 16
+logging:
+  group: null
+  id: null
+  mode: online
+  name: '${task_name}: dp d=${policy.model.transformer.n_emb}, layers=${policy.model.transformer.n_layer}, heads=${policy.model.transformer.n_head}, history=${n_obs_steps}, horizon=${horizon}, n_act=${n_action_steps}, encoder=${policy.model.obs_encoder}'
+  project: procgen_image
+  resume: true
+  tags:
+  - train_diffusion_transformer_image
+  - procgen
+  - default
+n_action_steps: 1
+n_latency_steps: 0
+n_obs_steps: 8
+name: train_diffusion_transformer_image
+optimizer:
+  betas:
+  - 0.9
+  - 0.95
+  learning_rate: 0.0001
+  weight_decay: 0.001
+
+embed_dim: 128
+channels: [32,64,64]
+fc_dim: 1024
+kernels: [8,4,3]
+strides: [4,2,1]
+observation_space: [64,64,3]
+
+policy:
+  _target_: diffusion_policy.policy.diffusion_transformer_image_policy.DiffusionTransformerImagePolicy
+  action_dim: ${action_dim}
+  horizon: ${horizon}
+  model:
+    _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerWithEncoderForDiffusion
+    obs_encoder:
+      _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.ConvEncoder
+      embed_dim: ${embed_dim}
+      channels: ${channels}
+      fc_dim: ${fc_dim}
+      kernels: ${kernels}
+      strides: ${strides}
+      observation_space: ${observation_space}
+    transformer:
+      _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
+      causal_attn: true
+      cond_dim: ${embed_dim}
+      horizon: ${horizon}
+      input_dim: ${action_dim}
+      n_cond_layers: 0
+      n_emb: 768
+      n_head: 4
+      n_layer: 8
+      n_obs_steps: ${n_obs_steps}
+      obs_as_cond: true
+      output_dim: ${action_dim}
+      p_drop_attn: 0.1
+      p_drop_emb: 0.0
+      time_as_cond: true
+
+  n_action_steps: ${n_action_steps}
+  n_obs_steps: ${n_obs_steps}
+  n_latency_steps: ${n_latency_steps}
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    beta_start: 0.0001
+    clip_sample: true
+    num_train_timesteps: 100
+    prediction_type: epsilon
+    variance_type: fixed_small
+  num_inference_steps: 100
+seed: 42
+task:
+  dataset:
+    _target_: diffusion_policy.dataset.procgen_image_dataset.ProcgenZarrDataset
+
+    zarr_path: /workspace1/rntoro/tcouso/procgen_compiled/coinrun_1M_E.zarr      #######################################################################
+
+    horizon: ${horizon}   # note: this must be sum of inference time prediction horizon and history len
+    pad_before: 0
+    pad_after: 0
+    seed: ${seed}
+    val_ratio: 0.02
+    max_train_episodes: 90
+  env_runner:
+    _target_: diffusion_policy.env_runner.procgen_image_runner.ProcgenImageRunner
+    env_name: coinrun
+    fps: 15
+    max_steps: 1000
+    n_obs_steps: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    # n_train_levels: 5
+    # n_val_levels: 5
+    # n_test_levels: 20
+    # n_train_vis: 0
+    # n_val_vis: 0
+    # n_test_vis: 1
+    # n_envs: 30
+    n_train_levels: 1
+    n_val_levels: 1
+    n_test_levels: 1
+    n_train_vis: 0
+    n_val_vis: 0
+    n_test_vis: 1
+    n_envs: 3
+task_name: procgen
+training:
+  checkpoint_every: 50
+  debug: false
+  device: cuda:0
+  gradient_accumulate_every: 1
+  lr_scheduler: cosine
+  lr_warmup_steps: 1000
+  max_train_steps: null
+  max_val_steps: null
+  num_epochs: 4500
+  resume: true
+  rollout_every: 100
+  sample_every: 5
+  seed: ${seed}
+  tqdm_interval_sec: 1.0
+  use_ema: true
+  val_every: 1
+val_dataloader:
+  batch_size: 32
+  num_workers: 8
+  persistent_workers: false
+  pin_memory: true
+  shuffle: false

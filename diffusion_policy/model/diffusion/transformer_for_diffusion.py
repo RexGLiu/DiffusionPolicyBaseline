@@ -49,14 +49,14 @@ class ConvEncoder(ModuleAttrMixin):
         self.observation_space = observation_space
         self.embed_dim = embed_dim
 
-        self.conv1 = nn.Conv2d(observation_space.shape[-1], channels[0], kernels[0], stride=strides[0])
+        self.conv1 = nn.Conv2d(observation_space[-1], channels[0], kernels[0], stride=strides[0])
         self.conv2 = nn.Conv2d(channels[0], channels[1], kernels[1], stride=strides[1])
         self.conv3 = nn.Conv2d(channels[1], channels[2], kernels[2], stride=strides[2])
         self.fc = nn.Linear(fc_dim, embed_dim)
-
+        
         self.apply_init_(self.modules())
 
-    def forward(self, x, t_embed=None):
+    def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
@@ -180,7 +180,7 @@ class ResNetEncoder(ModuleAttrMixin):
         super(ResNetEncoder, self).__init__()
         self.observation_space = observation_space
 
-        self.block1 = ResNetEncoderBlock(observation_space.shape[-1], channels[0])
+        self.block1 = ResNetEncoderBlock(observation_space[-1], channels[0])
         self.block2 = ResNetEncoderBlock(channels[0], channels[1])
         self.block3 = ResNetEncoderBlock(channels[1], channels[2])
 
@@ -215,7 +215,7 @@ class ResNet20Encoder(ModuleAttrMixin):
         super(ResNet20Encoder, self).__init__()
         self.observation_space = observation_space
         
-        self.block1 = ResNetEncoderBlock(observation_space.shape[-1], channels[0])
+        self.block1 = ResNetEncoderBlock(observation_space[-1], channels[0])
         self.block2 = ResNetEncoderBlock(channels[0], channels[1])
         self.block3 = ResNetEncoderBlock(channels[1], channels[2])
         self.block4 = ResNetEncoderBlock(channels[2], channels[3])
@@ -659,10 +659,12 @@ class TransformerWithEncoderForDiffusion(ModuleAttrMixin):
                     no_decay.add(fpn)
 
         # special case the position embedding parameter in the root GPT module as not decayed
-        no_decay.add("pos_emb")
         no_decay.add("_dummy_variable")
-        if self.cond_pos_emb is not None:
-            no_decay.add("cond_pos_emb")
+        no_decay.add("transformer._dummy_variable")
+        no_decay.add("obs_encoder._dummy_variable")
+        no_decay.add("transformer.pos_emb")
+        if self.transformer.cond_pos_emb is not None:
+            no_decay.add("transformer.cond_pos_emb")
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}
