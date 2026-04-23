@@ -22,7 +22,7 @@ ema:
   power: 0.75
   update_after_step: 0
 exp_name: default
-horizon: 16
+horizon: 10
 logging:
   group: null
   id: null
@@ -34,9 +34,9 @@ logging:
   - train_diffusion_transformer_image
   - procgen
   - default
-n_action_steps: 1
+n_action_steps: 4
 n_latency_steps: 0
-n_obs_steps: 8
+n_obs_steps: 2
 name: train_diffusion_transformer_image
 optimizer:
   betas:
@@ -110,30 +110,45 @@ task:
     val_ratio: 0.02
     max_train_episodes: 90
   env_runner:
-    _target_: diffusion_policy.env_runner.procgen_image_runner.ProcgenImageRunner
+    _target_: diffusion_policy.env_runner.procgen_image_runner_vec.ProcgenImageRunnerVec
     env_name: coinrun
-    fps: 15
+    # fps: 15
     max_steps: 1000
-    n_obs_steps: ${n_obs_steps}
+    history_len: ${n_obs_steps}
     n_action_steps: ${n_action_steps}
-    # n_train_levels: 5
-    # n_val_levels: 5
-    # n_test_levels: 20
+    n_train_levels: 10
+    n_val_levels: 1
+    n_test_levels: 10
+    n_envs: 21
+    # TODO: Video visualization logic needs fix
     # n_train_vis: 0
     # n_val_vis: 0
-    # n_test_vis: 1
-    # n_envs: 30
-    n_train_levels: 1
-    n_val_levels: 1
-    n_test_levels: 1
-    n_train_vis: 0
-    n_val_vis: 0
-    n_test_vis: 1
-    n_envs: 3
+    # n_test_vis: 0
+  # env_runner:
+  #   _target_: diffusion_policy.env_runner.procgen_image_runner.ProcgenImageRunner
+  #   env_name: coinrun
+  #   fps: 15
+  #   max_steps: 1000
+  #   n_obs_steps: ${n_obs_steps}
+  #   n_action_steps: ${n_action_steps}
+  #   # n_train_levels: 5
+  #   # n_val_levels: 5
+  #   # n_test_levels: 20
+  #   # n_train_vis: 0
+  #   # n_val_vis: 0
+  #   # n_test_vis: 1
+  #   # n_envs: 30
+  #   n_train_levels: 1
+  #   n_val_levels: 1
+  #   n_test_levels: 1
+  #   n_train_vis: 0
+  #   n_val_vis: 0
+  #   n_test_vis: 1
+  #   n_envs: 3
 task_name: procgen
 training:
   checkpoint_every: 50
-  debug: false
+  debug: true
   device: cuda:0
   gradient_accumulate_every: 1
   lr_scheduler: cosine
