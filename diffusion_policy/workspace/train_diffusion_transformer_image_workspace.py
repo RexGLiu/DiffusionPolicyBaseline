@@ -232,15 +232,14 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
                         batch = dict_apply(train_sampling_batch, lambda x: x.to(device, non_blocking=True))
                         # build history dict in the format predict_action expects:
                         # {'image': (B, Th, C, H, W), 'past_action': (B, Th-1, Da)}
-                        Th = cfg.history_len
+                        Th = cfg.n_obs_steps
                         obs_history = batch['obs']['image'][:, :Th]
                         history_dict = {
                             'obs': {
                                 'image': obs_history
-                                },
-                            'past_action': batch['action'][:, :Th]
+                                }
                         }
-                        gt_action = batch['action'][:, Th:]
+                        gt_action = batch['action']
                         result = policy.predict_action(history_dict)
                         pred_action = result['action_pred']
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)

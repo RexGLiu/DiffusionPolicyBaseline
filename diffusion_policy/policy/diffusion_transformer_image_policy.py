@@ -76,7 +76,7 @@ class DiffusionTransformerImagePolicy(BaseImagePolicy):
         return trajectory
 
 
-    def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def predict_action(self, obs_dict: Dict[str, Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         assert 'obs' in obs_dict
         assert 'past_action' not in obs_dict # not implemented yet
 
@@ -96,7 +96,6 @@ class DiffusionTransformerImagePolicy(BaseImagePolicy):
         if self.pred_action_steps_only:
             shape = (B, self.n_action_steps, Da)
         cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
-        cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
 
        # run sampling
         nsample = self.conditional_sample(
