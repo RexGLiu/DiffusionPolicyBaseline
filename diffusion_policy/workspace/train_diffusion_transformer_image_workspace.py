@@ -67,6 +67,9 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
             if lastest_ckpt_path.is_file():
                 print(f"Resuming from checkpoint {lastest_ckpt_path}")
                 self.load_checkpoint(path=lastest_ckpt_path)
+                self.global_step += 1
+                self.epoch += 1
+
 
         # configure dataset
         dataset: BaseImageDataset
@@ -142,9 +145,10 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
             cfg.training.sample_every = 1
 
         # training loop
+        step_logs = []
         log_path = os.path.join(self.output_dir, 'logs.json.txt')
         with JsonLogger(log_path) as json_logger:
-            for local_epoch_idx in range(cfg.training.num_epochs):
+            for local_epoch_idx in range(self.epoch, cfg.training.num_epochs):
                 step_log = dict()
                 # ========= train for this epoch ==========
                 train_losses = list()
@@ -187,7 +191,7 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
                         is_last_batch = (batch_idx == (len(train_dataloader)-1))
                         if not is_last_batch:
                             wandb_run.log(step_log, step=self.global_step)
-                            json_logger.log(step_log)
+                            step_logs.append(step_log)
                             self.global_step += 1
 
                         if (cfg.training.max_train_steps is not None) \
@@ -248,9 +252,15 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
                         del batch, history_dict, gt_action, result, pred_action, mse
 
                 # checkpoint
-                if (self.epoch % cfg.training.checkpoint_every) == 0:
+                if ((self.epoch % cfg.training.checkpoint_every) == 0) and (self.epoch != 0):
                     if cfg.checkpoint.save_last_ckpt:
                         self.save_checkpoint()
+
+                        # log to json file at the same time
+                        for i, _ in enumerate(step_logs):
+                            json_logger.log(step_logs[i])
+                        step_logs = []
+
                     if cfg.checkpoint.save_last_snapshot:
                         self.save_snapshot()
 
@@ -268,7 +278,7 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
 
                 # end of epoch
                 wandb_run.log(step_log, step=self.global_step)
-                json_logger.log(step_log)
+                step_logs.append(step_log)
                 self.global_step += 1
                 self.epoch += 1
 
