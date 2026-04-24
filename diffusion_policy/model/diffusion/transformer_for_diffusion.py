@@ -155,6 +155,7 @@ class BasicBlock(ModuleAttrMixin):
 
 class ResNetEncoderBlock(ModuleAttrMixin):
     def __init__(self, in_channels, out_channels):
+        super(ResNetEncoderBlock, self).__init__()
         self.layer1 = Conv2d_tf(in_channels, out_channels, kernel_size=3, stride=1)
         self.layer2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -176,7 +177,7 @@ class ResNetEncoder(ModuleAttrMixin):
     Adapted from https://github.com/facebookresearch/gen_dgrl/tree/main/procgen.
     """
 
-    def __init__(self, observation_space, hidden_size=256, channels=[16, 32, 32]):
+    def __init__(self, observation_space, embed_dim=256, channels=[16, 32, 32]):
         super(ResNetEncoder, self).__init__()
         self.observation_space = observation_space
 
@@ -186,7 +187,7 @@ class ResNetEncoder(ModuleAttrMixin):
 
         self.relu = nn.ReLU()
 
-        self.fc = init_relu_(nn.Linear(2048, hidden_size))
+        self.fc = init_relu_(nn.Linear(2048, embed_dim))
 
         apply_init_(self.modules())
 
@@ -211,7 +212,7 @@ class ResNet20Encoder(ModuleAttrMixin):
     Adapted from https://github.com/facebookresearch/gen_dgrl/tree/main/procgen.
     """
 
-    def __init__(self, observation_space, hidden_size=256, channels=[64, 256, 256, 512]):
+    def __init__(self, observation_space, embed_dim=256, channels=[64, 256, 256, 512]):
         super(ResNet20Encoder, self).__init__()
         self.observation_space = observation_space
         
@@ -223,7 +224,7 @@ class ResNet20Encoder(ModuleAttrMixin):
         self.relu = nn.ReLU()
 
         self.fc1 = init_relu_(nn.Linear(8192, 2048))
-        self.fc2 = init_relu_(nn.Linear(2048, hidden_size))
+        self.fc2 = init_relu_(nn.Linear(2048, embed_dim))
 
         apply_init_(self.modules())
 
@@ -657,11 +658,14 @@ class TransformerWithEncoderForDiffusion(ModuleAttrMixin):
                 elif pn.endswith("weight") and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
+                elif pn.endswith("_dummy_variable"):
+                    # _dummy_variable of ModuleAttrMixin will NOT be weight decayed
+                    no_decay.add(fpn)
 
         # special case the position embedding parameter in the root GPT module as not decayed
-        no_decay.add("_dummy_variable")
-        no_decay.add("transformer._dummy_variable")
-        no_decay.add("obs_encoder._dummy_variable")
+        # no_decay.add("_dummy_variable")
+        # no_decay.add("transformer._dummy_variable")
+        # no_decay.add("obs_encoder._dummy_variable")
         no_decay.add("transformer.pos_emb")
         if self.transformer.cond_pos_emb is not None:
             no_decay.add("transformer.cond_pos_emb")

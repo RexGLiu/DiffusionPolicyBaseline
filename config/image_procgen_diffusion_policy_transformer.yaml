@@ -9,7 +9,7 @@ checkpoint:
     mode: max
     monitor_key: test_mean_score
 dataloader:
-  batch_size: 64
+  batch_size: 256
   num_workers: 16
   persistent_workers: true
   pin_memory: true
@@ -46,10 +46,6 @@ optimizer:
   weight_decay: 0.001
 
 embed_dim: 128
-channels: [32,64,64]
-fc_dim: 1024
-kernels: [8,4,3]
-strides: [4,2,1]
 observation_space: [64,64,3]
 
 policy:
@@ -60,12 +56,10 @@ policy:
     _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerWithEncoderForDiffusion
     obs_encoder:
       _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.ConvEncoder
-      embed_dim: ${embed_dim}
-      channels: ${channels}
-      fc_dim: ${fc_dim}
-      kernels: ${kernels}
-      strides: ${strides}
+      # _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.ResNetEncoder
+      # _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.ResNet20Encoder
       observation_space: ${observation_space}
+      embed_dim: ${embed_dim}
     transformer:
       _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
       causal_attn: true
@@ -73,7 +67,7 @@ policy:
       horizon: ${horizon}
       input_dim: ${action_dim}
       n_cond_layers: 0
-      n_emb: 768
+      n_emb: 256
       n_head: 4
       n_layer: 8
       n_obs_steps: ${n_obs_steps}
@@ -95,7 +89,7 @@ policy:
     num_train_timesteps: 100
     prediction_type: epsilon
     variance_type: fixed_small
-  num_inference_steps: 100
+  num_inference_steps: 20
 seed: 42
 task:
   dataset:
@@ -107,8 +101,8 @@ task:
     pad_before: 0
     pad_after: 0
     seed: ${seed}
-    val_ratio: 0.02
-    max_train_episodes: 90
+    val_ratio: 0.05
+    max_train_episodes: null
   env_runner:
     _target_: diffusion_policy.env_runner.procgen_image_runner_vec.ProcgenImageRunnerVec
     env_name: coinrun
@@ -145,9 +139,9 @@ task:
   #   n_val_vis: 0
   #   n_test_vis: 1
   #   n_envs: 3
-task_name: procgen
+task_name: procgen_image
 training:
-  checkpoint_every: 50
+  checkpoint_every: 5
   debug: true
   device: cuda:0
   gradient_accumulate_every: 1
@@ -155,17 +149,17 @@ training:
   lr_warmup_steps: 1000
   max_train_steps: null
   max_val_steps: null
-  num_epochs: 4500
+  num_epochs: 100
   resume: true
-  rollout_every: 100
-  sample_every: 5
+  rollout_every: 1
+  sample_every: 1
   seed: ${seed}
   tqdm_interval_sec: 1.0
   use_ema: true
   val_every: 1
 val_dataloader:
-  batch_size: 32
-  num_workers: 8
+  batch_size: 256
+  num_workers: 16
   persistent_workers: false
   pin_memory: true
   shuffle: false
