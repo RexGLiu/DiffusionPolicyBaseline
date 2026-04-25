@@ -1,36 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-import gym
-from gym.spaces import Box, Discrete
-from gym import spaces
-import procgen
 
 from abc import ABC, abstractmethod
-from typing import Optional, Type, Dict
+from typing import Type, Sequence
 
 '''
 Feature extractor module from https://huggingface.co/sgoodfriend/ppo-procgen-coinrun-easy/blob/main/shared/module/feature_extractor.py
 '''
-
-def get_flattened_obs_dim(observation_space: spaces.Space) -> int:
-    """
-    Get the dimension of the observation space when flattened.
-    It does not apply to image observation space.
-
-    Copied from Stable-Baselines 3
-
-    :param observation_space:
-    :return:
-    """
-    # See issue https://github.com/openai/gym/issues/1915
-    # it may be a problem for Dict/Tuple spaces too...
-    if isinstance(observation_space, spaces.MultiDiscrete):
-        return sum(observation_space.nvec)
-    else:
-        # Use Gym internal method
-        return spaces.utils.flatdim(observation_space)
 
 
 class ResidualBlock(nn.Module):
@@ -111,80 +87,103 @@ class ImpalaCnn(CnnFeatureExtractor):
         return self.seq(obs)
 
 
-class ProcgenFeatureExtractor(nn.Module):
-    def __init__(
-        self,
-        obs_space: gym.Space, # H x W x C
-        activation: Type[nn.Module],
-        cnn_feature_dim: int = 512,
-    ) -> None:
+
+
+class ProcgenEncoder(nn.Module):
+    """
+    Custom pre-trained observation encoder for Procgen.
+    Define your architecture here and set checkpoint_path in the config to load weights.
+    """
+
+    def __init__(self,
+                 observation_space: Sequence[int] = [3,64,64], 
+                 embed_dim: int = 256,
+                 checkpoint_path: str = None,
+                 state_dict_key: str = None):
+        """
+        embed_dim:       output latent dimensionality
+        checkpoint_path: path to .pt/.ckpt file; if None, random init is used
+        state_dict_key:  dotted key into the checkpoint dict,
+                         e.g. "encoder" or "model.encoder" — None tries common conventions
+        """
         super().__init__()
-        if isinstance(obs_space, Box):
-            # Conv2D: (channels, height, width)
-            if len(obs_space.shape) == 3:
-                cnn = ImpalaCnn(
-                    obs_space.shape[-1],
-                    activation,
-                )
+        self.embed_dim = embed_dim
 
-                def preprocess(obs: torch.Tensor) -> torch.Tensor:
-                    if len(obs.shape) == 3:
-                        obs = obs.unsqueeze(0)
-                    return obs.float() / 255.0
+        # architecture
+        activation = nn.ReLU
 
-                with torch.no_grad():
-                    dummy_obs = torch.as_tensor(obs_space.sample()).permute(2, 0, 1)
-                    cnn_out = cnn(preprocess(dummy_obs))
-                self.preprocess = preprocess
-                self.feature_extractor = nn.Sequential(
-                    cnn,
-                    nn.Linear(cnn_out.shape[1], cnn_feature_dim),
-                    activation(),
-                )
-                self.out_dim = cnn_feature_dim
-            elif len(obs_space.shape) == 1:
+        # Conv2D: (channels, height, width)
+        cnn = ImpalaCnn(
+            observation_space[0],
+            activation,
+        )
 
-                def preprocess(obs: torch.Tensor) -> torch.Tensor:
-                    if len(obs.shape) == 1:
-                        obs = obs.unsqueeze(0)
-                    return obs.float()
+        def preprocess(obs: torch.Tensor) -> torch.Tensor:
+            if len(obs.shape) == 3:
+                obs = obs.unsqueeze(0)
+            return obs.float() / 255.0
 
-                self.preprocess = preprocess
-                self.feature_extractor = nn.Flatten()
-                self.out_dim = get_flattened_obs_dim(obs_space)
-            else:
-                raise ValueError(f"Unsupported observation space: {obs_space}")
-        else:
-            raise NotImplementedError
+        with torch.no_grad():
+            dummy_obs = torch.randn(1, *observation_space)
+            cnn_out = cnn(preprocess(dummy_obs))
+        self.preprocess = preprocess
+        self.feature_extractor = nn.Sequential(
+            cnn,
+            nn.Linear(cnn_out.shape[1], embed_dim),
+            activation(),
+        )
+        self.out_dim = embed_dim
+    
 
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        if checkpoint_path is not None:
+            ckpt = torch.load(checkpoint_path, map_location='cpu')
+            if state_dict_key is not None:
+                for key in state_dict_key.split('.'):
+                    ckpt = ckpt[key]
+            elif isinstance(ckpt, dict):
+                for key in ('state_dict', 'model', 'encoder'):
+                    if key in ckpt:
+                        ckpt = ckpt[key]
+                        break
+            self.load_state_dict(ckpt)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (B, C, H, W)
+        returns: (B, embed_dim)
+        """
         if self.preprocess:
-            obs = self.preprocess(obs)
-        return self.feature_extractor(obs)
+            x = self.preprocess(x)
+        return self.feature_extractor(x)
+
     
 def load_feature_extractor(path: str, 
-                           obs_space: gym.Space, 
-                           activation: Type[nn.Module] = nn.ReLU,
-                           cnn_feature_dim: int = 256) -> ProcgenFeatureExtractor:
+                           observation_space = [3,64,64], 
+                           cnn_feature_dim: int = 256) -> ProcgenEncoder:
     
-    feature_extractor = ProcgenFeatureExtractor(obs_space, activation, cnn_feature_dim)
+    feature_extractor = ProcgenEncoder(observation_space, cnn_feature_dim)
 
     state_dict = torch.load(path)
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        if key.startswith("_feature_extractor."):
-            new_key = key[len("_feature_extractor."):]  # removes the prefix
-            new_state_dict[new_key] = value
+    if path.endswith('_original.pt'):
+        new_state_dict = {}
+        for key, value in state_dict.items():
+            if key.startswith("_feature_extractor."):
+                new_key = key[len("_feature_extractor."):]  # removes the prefix
+                new_state_dict[new_key] = value
+        state_dict = new_state_dict
 
-    feature_extractor.load_state_dict(new_state_dict)
+    feature_extractor.load_state_dict(state_dict)
     feature_extractor.eval()
+
     print('done loading feature extractor')
 
     return feature_extractor
 
 if __name__ == "__main__":
-    path = "/home/rexgliu/archive/tmp/procgen_encoder_ckpts/coinrun_easy_feature_extractor_original.pt"
-    env = gym.make("procgen:procgen-coinrun-v0")
-    feature_extractor = load_feature_extractor(path, env.observation_space)
-    torch.save(feature_extractor.state_dict(), "coinrun_easy_feature_extractor.pt")
+    # path = "/home/rexgliu/archive/tmp/procgen_encoder_ckpts/coinrun_easy_feature_extractor_original.pt"
+    path = "/home/rexgliu/archive/tmp/procgen_encoder_ckpts/coinrun_easy_feature_extractor.pt"
+    feature_extractor = load_feature_extractor(path)
+
+    if path.endswith('_original.pt'):
+        torch.save(feature_extractor.state_dict(), "coinrun_easy_feature_extractor.pt")
     print('done main')

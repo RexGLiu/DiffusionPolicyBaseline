@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-
 from typing import Sequence
 
 '''
@@ -50,22 +49,54 @@ def _get_flat_size(obs_space, channels):
     return x.shape[1] * x.shape[2] * x.shape[3]
 
 
-class ProcgenFeatureExtractor(nn.Module):
-    def __init__(self, obs_space: Sequence[int] = [3,64,64], channels: Sequence[int] = (16, 32, 32), emb_dim=256):
+class ProcgenEncoder(nn.Module):
+    """
+    Custom pre-trained observation encoder for Procgen.
+    Define your architecture here and set checkpoint_path in the config to load weights.
+    """
+
+    def __init__(self,
+                 observation_space: Sequence[int] = [3,64,64], 
+                 channels: Sequence[int] = (16, 32, 32), 
+                 embed_dim=256,
+                 checkpoint_path: str = None,
+                 state_dict_key: str = None):
+        """
+        embed_dim:       output latent dimensionality
+        checkpoint_path: path to .pt/.ckpt file; if None, random init is used
+        state_dict_key:  dotted key into the checkpoint dict,
+                         e.g. "encoder" or "model.encoder" — None tries common conventions
+        """
         super().__init__()
+        self.embed_dim = embed_dim
+
+        # architecture
         convs = []
-        c_in = obs_space[0]
+        c_in = observation_space[0]
         for c_out in channels:
             convs.append(ConvSequence(c_in, c_out))
             c_in = c_out
         self.convs = nn.ModuleList(convs)
-        flat_size = _get_flat_size(obs_space, channels)
-        self.fc = nn.Linear(flat_size, emb_dim)
+        flat_size = _get_flat_size(observation_space, channels)
+        self.fc = nn.Linear(flat_size, embed_dim)
 
-    def forward(self, x):
-        '''
-            x: (B, C, H, W)
-        '''
+        if checkpoint_path is not None:
+            ckpt = torch.load(checkpoint_path, map_location='cpu')
+            if state_dict_key is not None:
+                for key in state_dict_key.split('.'):
+                    ckpt = ckpt[key]
+            elif isinstance(ckpt, dict):
+                for key in ('state_dict', 'model', 'encoder'):
+                    if key in ckpt:
+                        ckpt = ckpt[key]
+                        break
+            self.load_state_dict(ckpt)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (B, C, H, W)
+        returns: (B, embed_dim)
+        """
         x = x.float() / 255.0
         for conv in self.convs:
             x = conv(x)
@@ -77,9 +108,12 @@ class ProcgenFeatureExtractor(nn.Module):
         return x
 
 
+
+
+
 if __name__ == "__main__":
     obs_space = [3,64,64]
-    f_extractor = ProcgenFeatureExtractor(obs_space, [16,32,32], 64)
+    f_extractor = ProcgenEncoder(obs_space, [16,32,32], 64)
     x = torch.zeros([2,*obs_space])
     f_extractor(x)
     print('done')
