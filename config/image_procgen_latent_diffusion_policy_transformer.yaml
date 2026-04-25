@@ -1,0 +1,147 @@
+_target_: diffusion_policy.workspace.train_diffusion_latent_transformer_image_workspace.TrainDiffusionLatentTransformerImageWorkspace
+
+action_dim: 1
+embed_dim: 256           # must match your pre-trained encoder's output dim
+observation_space: [64, 64, 3]
+
+horizon: 10
+n_obs_steps: 2
+n_action_steps: 4
+n_latency_steps: 0
+obs_as_cond: true
+
+checkpoint:
+  save_last_ckpt: true
+  save_last_snapshot: false
+  topk:
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+    k: 5
+    mode: max
+    monitor_key: test_mean_score
+
+dataloader:
+  batch_size: 128
+  num_workers: 12
+  persistent_workers: false
+  pin_memory: true
+  shuffle: true
+
+val_dataloader:
+  batch_size: 128
+  num_workers: 12
+  persistent_workers: false
+  pin_memory: true
+  shuffle: false
+
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  inv_gamma: 1.0
+  max_value: 0.9999
+  min_value: 0.0
+  power: 0.75
+  update_after_step: 0
+
+exp_name: default
+seed: 42
+
+optimizer:
+  betas: [0.9, 0.95]
+  learning_rate: 0.0001
+  weight_decay: 0.001
+
+logging:
+  group: null
+  id: null
+  mode: online
+  name: 'latent_diffusion_baseline: transformer_dim=${policy.model.n_emb}, layers=${policy.model.n_layer}, heads=${policy.model.n_head}, history=${n_obs_steps}, horizon=${horizon}, n_act=${n_action_steps}'
+  entity: rex-g-liu-cenia
+  project: procgen_image
+  resume: allow
+  tags:
+    - latent_diffusion_transformer_baseline
+    - procgen
+
+policy:
+  _target_: diffusion_policy.policy.diffusion_latent_transformer_image_policy.DiffusionLatentTransformerImagePolicy
+  action_dim: ${action_dim}
+  horizon: ${horizon}
+  embed_dim: ${embed_dim}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  n_latency_steps: ${n_latency_steps}
+
+  obs_encoder:
+    _target_: diffusion_policy.model.vision.procgen_encoder.ProcgenEncoder
+    embed_dim: ${embed_dim}
+    checkpoint_path: procgen_encoder_ckpts/coinrun_hard_clean_rl_feature_extractor.pt
+    state_dict_key: null   # e.g. "encoder" if the checkpoint nests the weights
+
+  model:
+    _target_: diffusion_policy.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
+    causal_attn: true
+    cond_dim: ${embed_dim}
+    horizon: ${horizon}
+    input_dim: ${action_dim}
+    n_cond_layers: 0
+    n_emb: 256   # not to be confused with embed_dim -- this controls dimensionality of the transformer model
+    n_head: 4
+    n_layer: 8
+    n_obs_steps: ${n_obs_steps}
+    obs_as_cond: true
+    output_dim: ${action_dim}
+    p_drop_attn: 0.1
+    p_drop_emb: 0.0
+    time_as_cond: true
+
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    beta_start: 0.0001
+    clip_sample: true
+    num_train_timesteps: 100
+    prediction_type: epsilon
+    variance_type: fixed_small
+
+  num_inference_steps: 20
+
+task:
+  dataset:
+    _target_: diffusion_policy.dataset.procgen_image_dataset.ProcgenZarrDataset
+    zarr_path: /workspace1/rntoro/tcouso/procgen_compiled/coinrun_1M_E.zarr
+    horizon: ${horizon}  
+    pad_before: 0
+    pad_after: 0
+    seed: ${seed}
+    val_ratio: 0.05
+    max_train_episodes: null
+  env_runner:
+    _target_: diffusion_policy.env_runner.procgen_image_runner_vec.ProcgenImageRunnerVec
+    env_name: coinrun
+    max_steps: 1000
+    history_len: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    n_train_levels: 10
+    n_val_levels: 1
+    n_test_levels: 10
+    n_envs: 21
+
+task_name: procgen_latent_image_baseline
+
+training:
+  checkpoint_every: 1
+  debug: false
+  device: cuda:0
+  gradient_accumulate_every: 1
+  lr_scheduler: cosine
+  lr_warmup_steps: 1000
+  max_train_steps: null
+  max_val_steps: null
+  num_epochs: 100
+  resume: true
+  rollout_every: 1
+  sample_every: 1
+  seed: ${seed}
+  tqdm_interval_sec: 1.0
+  use_ema: true
+  val_every: 1
