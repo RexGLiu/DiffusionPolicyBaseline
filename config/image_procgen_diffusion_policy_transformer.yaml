@@ -97,7 +97,7 @@ task:
 
     zarr_path: /workspace1/rntoro/tcouso/procgen_compiled/coinrun_1M_E.zarr      #######################################################################
 
-    horizon: ${horizon}   # note: this must be sum of inference time prediction horizon and history len
+    horizon: ${horizon}  
     pad_before: 0
     pad_after: 0
     seed: ${seed}
@@ -142,7 +142,7 @@ task:
 task_name: procgen_image
 training:
   checkpoint_every: 5
-  debug: true
+  debug: false
   device: cuda:0
   gradient_accumulate_every: 1
   lr_scheduler: cosine
