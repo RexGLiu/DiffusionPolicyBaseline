@@ -282,6 +282,9 @@ class TrainDiffusionTransformerImageWorkspace(BaseWorkspace):
                 self.global_step += 1
                 self.epoch += 1
 
+            for log in step_logs:
+                json_logger.log(log)
+
 
 @hydra.main(
     version_base=None,
