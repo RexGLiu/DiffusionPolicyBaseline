@@ -117,20 +117,20 @@ class DiffusionLatentTransformerImagePolicy(BaseImagePolicy):
 
         x = self.conditional_sample(cond_data, obs_cond=latent_obs_cond, **self.kwargs)
 
-        action_pred = self.normalizer['action'].unnormalize(x[:, :, :Da])
+        action_pred = x.argmax(dim=-1, keepdim=True)
 
         # get action
-        start = self.n_obs_steps - 1
-        assert start > 0, "action start index must be at least 0"
         if self.pred_action_steps_only:
             action = action_pred
         else:
+            start = self.n_obs_steps - 1
+            assert start > 0, "action start index must be at least 0"
             end = start + self.n_action_steps
             action = action_pred[:,start:end]
 
         return {
             'action': action,
-            'action_pred': action_pred[:, start:],
+            'action_pred': action_pred,
         }
 
     # ========= training ============
@@ -152,9 +152,9 @@ class DiffusionLatentTransformerImagePolicy(BaseImagePolicy):
         assert self.obs_as_cond, "obs_as_cond == False not implemented"
 
         images = batch['obs']['image'][:,:self.n_obs_steps,...]   # (B, To, C, H, W)
-        actions = batch['action']        # (B, T, Da)
+        action_idx = batch['action'].squeeze(-1).long()   # (B, Th)
 
-        naction = self.normalizer['action'].normalize(actions)
+        naction = F.one_hot(action_idx, num_classes=self.action_dim) - 0.5   # (B, Th, Da)
         latent_obs_cond = self._encode_obs(images)   # (B, To, embed_dim) -- note: encoder expects unnormalised pixel values in range [0,255]
 
         B, T, Da = naction.shape

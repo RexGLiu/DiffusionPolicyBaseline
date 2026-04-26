@@ -204,8 +204,7 @@ class TrainDiffusionLatentTransformerImageWorkspace(BaseWorkspace):
                         history_dict = {
                             'obs': {'image': batch['obs']['image'][:, :To]}
                         }
-                        assert To > 0, "n_obs_steps must be at least 1"
-                        gt_action = batch['action'][:, To-1:]
+                        gt_action = 2*F.one_hot(batch['action'].squeeze(-1).long(), num_classes=self.cfg.action_dim).float() - 1
 
                         result = policy.predict_action(history_dict)
                         action_mse = F.mse_loss(result['action_pred'], gt_action)

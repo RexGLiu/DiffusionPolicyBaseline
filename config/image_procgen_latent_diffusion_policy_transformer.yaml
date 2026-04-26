@@ -1,6 +1,6 @@
 _target_: diffusion_policy.workspace.train_diffusion_latent_transformer_image_workspace.TrainDiffusionLatentTransformerImageWorkspace
 
-action_dim: 1
+action_dim: 15
 embed_dim: 256           # must match your pre-trained encoder's output dim
 observation_space: [64, 64, 3]
 
