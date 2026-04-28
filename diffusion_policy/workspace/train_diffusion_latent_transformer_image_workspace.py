@@ -215,8 +215,7 @@ class TrainDiffusionLatentTransformerImageWorkspace(BaseWorkspace):
                 if ((self.epoch % cfg.training.checkpoint_every) == 0) and (self.epoch != 0):
                     if cfg.checkpoint.save_last_ckpt:
                         self.save_checkpoint()
-                        for log in step_logs:
-                            json_logger.log(log)
+                        for log in step_logs: json_logger.log(log)
                         step_logs = []
 
                     if cfg.checkpoint.save_last_snapshot:
@@ -236,8 +235,7 @@ class TrainDiffusionLatentTransformerImageWorkspace(BaseWorkspace):
                 self.global_step += 1
                 self.epoch += 1
 
-            for log in step_logs:
-                json_logger.log(log)
+            for log in step_logs: json_logger.log(log)
 
 
 @hydra.main(

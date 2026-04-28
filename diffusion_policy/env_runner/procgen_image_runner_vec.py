@@ -42,10 +42,10 @@ class ProcgenImageRunnerVec(BaseImageRunner):
     ):
         super().__init__(output_dir)
 
-        assert 1 <= n_train_levels <= 200, "n_train_levels must be in [1, 200]"
-        assert 1 <= n_val_levels <= 50,    "n_val_levels must be in [1, 50]"
-        assert 1 <= n_test_levels <= 9750, "n_test_levels must be in [1, 9750]"
-
+        assert 0 <= n_train_levels <= 200, "n_train_levels must be in [0, 200]"
+        assert 0 <= n_val_levels <= 50,    "n_val_levels must be in [0, 50]"
+        assert 0 <= n_test_levels <= 9750, "n_test_levels must be in [0, 9750]"
+        
         self.env_name = env_name
         self.n_envs = n_envs
         self.history_len = history_len
@@ -73,9 +73,14 @@ class ProcgenImageRunnerVec(BaseImageRunner):
     def run(self, policy: BaseImagePolicy) -> dict:
         device = policy.device
 
+        active_configs = {
+            split: config
+            for split, config in self.split_configs.items()
+            if config['num_levels'] > 0
+        }
         envs = {
             split: self._make_env(**config)
-            for split, config in self.split_configs.items()
+            for split, config in active_configs.items()
         }
 
         histories = {split: env.reset() for split, env in envs.items()}
